@@ -20,7 +20,7 @@ class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(80), nullable=False)
-
+    cart = db.relationship('CartItem', backref='user', lazy=True)
 
 # Produto (id, name, price, description)
 class Product(db.Model):
@@ -28,6 +28,13 @@ class Product(db.Model):
     name = db.Column(db.String(120), nullable=False)
     price = db.Column(db.Float, nullable=False)
     description = db.Column(db.Text, nullable=True)
+
+# Carrinho (id, name, price, description)
+class CartItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    quantity = db.Column(db.Integer)
 
 # Rotas
 # Autenticação
@@ -66,6 +73,7 @@ def add_product():
 
 # Deletar Produto
 @app.route('/api/products/delete/<int:product_id>', methods=['DELETE'])
+@login_required
 def delete_product(product_id):
     # Recuperar o produto da base de dados
     # Verificar se o produto existe
@@ -93,6 +101,7 @@ def get_product_details(product_id):
 
 # Atualizar detalhes de um Produto
 @app.route('/api/products/update/<int:product_id>', methods=['PUT'])
+@login_required
 def update_product(product_id):
     product = Product.query.get(product_id)
     if not product:
