@@ -2,7 +2,7 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-from flask_login import UserMixin, login_user, LoginManager, login_required, logout_user
+from flask_login import UserMixin, login_user, LoginManager, login_required, logout_user, current_user
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '4*q%0Da?2r#,'
@@ -29,7 +29,7 @@ class Product(db.Model):
     price = db.Column(db.Float, nullable=False)
     description = db.Column(db.Text, nullable=True)
 
-# Carrinho (id, name, price, description)
+# Carrinho (id, user_id, product_id, quantity)
 class CartItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -135,10 +135,67 @@ def get_products():
         product_list.append(product_data)
     return jsonify(product_list)
 
-# Definir uma rota raiz (pagina incial) e a função que será executada ao requisitar
-@app.route('/')
-def index():
-    return 'Olá, mundo!'
+# Checkout
+# Adicionar item (produto) ao carrinho
+@app.route('/api/cart/add/<int:product_id>', methods=['POST'])
+@login_required
+def add_to_cart(product_id):
+    # Usuario
+    user = User.query.get(int(current_user.id))
+    # Produto
+    product = Product.query.get(int(product_id))
+    
+    if user and product:
+        cart_item = CartItem(user_id=user.id, product_id=product.id)
+        db.session.add(cart_item)
+        db.session.commit()
+        return jsonify({"message": "Produto adicionado ao carrinho com sucesso."})
+    return jsonify({"message": "Falha ao adicionar produto ao carrinho."}), 400
+
+
+# Remover item (produto) do carrinho
+@app.route('/api/cart/remove/<int:product_id>', methods=['DELETE'])
+@login_required
+def remove_from_cart(product_id):
+    # Usuario, Produto = Item no carrinho
+    cart_item = CartItem.query.filter_by(user_id=current_user.id, product_id=product_id).first()
+    if cart_item:
+        db.session.delete(cart_item)
+        db.session.commit()
+        return jsonify({"message": "Produto removido do carrinho com sucesso."})
+    return jsonify({"message": "Falha ao remover produto do carrinho."}), 400
+
+# Recuperar detalhes de todos os items no carrinho
+@app.route('/api/cart', methods=['GET'])
+@login_required
+def view_cart():
+    # Usuario
+    user = User.query.get(int(current_user.id))
+    cart_items = user.cart
+    cart_list = []
+    for cart_item in cart_items:
+        product = Product.query.get(cart_item.product_id)
+        cart_list.append({
+            'id': cart_item.id,
+            'user_id': cart_item.user_id,
+            'product_id': cart_item.product_id,
+            'quantity': cart_item.quantity,
+            'product_name': product.name,
+            'product_price': product.price,
+        })
+    return jsonify(cart_list)
+
+# Realiza limpeza do carrinho e fecha pedido do cliente
+@app.route('/api/cart/checkout', methods=['POST'])
+@login_required
+def checkout():
+    # Usuario
+    user = User.query.get(int(current_user.id))
+    cart_items = user.cart
+    for cart_item in cart_items:
+        db.session.delete(cart_item)
+    db.session.commit()
+    return jsonify({"message": "Finalização de compra com sucesso! Carrinho foi limpo."})
 
 
 if __name__ == '__main__':
